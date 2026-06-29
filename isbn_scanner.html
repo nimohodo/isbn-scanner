@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>ISBNスキャナー</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif; background: #f2f2f7; color: #1c1c1e; min-height: 100vh; }
+  header { background: #fff; border-bottom: 0.5px solid #c6c6c8; padding: 16px; text-align: center; position: sticky; top: 0; z-index: 10; }
+  header h1 { font-size: 17px; font-weight: 600; }
+  header p { font-size: 12px; color: #8e8e93; margin-top: 2px; }
+  .content { padding: 16px; max-width: 480px; margin: 0 auto; }
+  section { margin-bottom: 24px; }
+  .section-label { font-size: 12px; color: #8e8e93; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 8px; padding: 0 4px; }
+  .card { background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+  #video-wrap { position: relative; width: 100%; aspect-ratio: 4/3; background: #000; border-radius: 12px; overflow: hidden; display: none; margin-bottom: 12px; }
+  #video { width: 100%; height: 100%; object-fit: cover; display: block; }
+  #overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+  .frame { width: 70%; aspect-ratio: 3/1; border: 2px solid rgba(255,255,255,0.9); border-radius: 8px; position: relative; overflow: hidden; }
+  .scanline { position: absolute; left: 0; right: 0; height: 2px; background: #34c759; animation: scan 1.8s ease-in-out infinite; }
+  @keyframes scan { 0% { top: 5%; } 50% { top: 90%; } 100% { top: 5%; } }
+  #cam-hint { position: absolute; bottom: 10px; left: 0; right: 0; text-align: center; color: rgba(255,255,255,0.9); font-size: 13px; }
+  .btn-primary { width: 100%; padding: 14px; background: #007aff; color: #fff; border: none; border-radius: 12px; font-size: 16px; font-weight: 600; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+  .btn-primary:active { opacity: 0.8; }
+  .btn-primary:disabled { background: #aeaeb2; cursor: not-allowed; }
+  .btn-secondary { width: 100%; padding: 13px; background: #fff; color: #007aff; border: 1px solid #c6c6c8; border-radius: 12px; font-size: 15px; font-weight: 500; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+  .btn-secondary:active { background: #f2f2f7; }
+  .btn-danger { background: none; border: none; color: #ff3b30; font-size: 13px; cursor: pointer; padding: 4px 8px; }
+  #lib-msg { font-size: 13px; color: #8e8e93; text-align: center; padding: 8px 0 12px; }
+  #detect-banner { display: none; background: #34c759; color: #fff; padding: 10px 16px; border-radius: 10px; font-size: 14px; font-weight: 500; text-align: center; margin-bottom: 12px; }
+  #book-preview { display: none; margin-bottom: 12px; }
+  .book-inner { display: flex; gap: 12px; padding: 14px; }
+  #bk-img { width: 56px; height: 76px; object-fit: cover; border-radius: 6px; border: 0.5px solid #e5e5ea; flex-shrink: 0; display: none; }
+  #bk-ph { width: 56px; height: 76px; background: #f2f2f7; border-radius: 6px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 28px; }
+  .bk-meta { flex: 1; min-width: 0; }
+  #bk-title { font-size: 14px; font-weight: 600; line-height: 1.4; margin-bottom: 3px; }
+  #bk-author { font-size: 12px; color: #8e8e93; margin-bottom: 2px; }
+  #bk-pub { font-size: 11px; color: #aeaeb2; }
+  #bk-isbn { font-size: 11px; color: #007aff; font-family: monospace; margin-top: 4px; }
+  .book-actions { padding: 0 14px 14px; display: flex; gap: 8px; }
+  .book-actions button { font-size: 14px; padding: 11px; }
+  .list-row { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 0.5px solid #e5e5ea; }
+  .list-row:last-child { border-bottom: none; }
+  .row-info { flex: 1; min-width: 0; }
+  .row-isbn { font-size: 11px; font-family: monospace; color: #8e8e93; margin-bottom: 1px; }
+  .row-title { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .del-btn { color: #c7c7cc; background: none; border: none; font-size: 20px; cursor: pointer; padding: 4px; }
+  .empty-msg { font-size: 13px; color: #aeaeb2; text-align: center; padding: 20px; }
+  #loading { display: none; font-size: 13px; color: #8e8e93; text-align: center; padding: 12px; }
+  #isbn-ta { width: 100%; font-family: monospace; font-size: 13px; background: #fff; border: none; border-radius: 12px; padding: 12px 14px; resize: none; min-height: 80px; line-height: 1.9; box-shadow: 0 1px 3px rgba(0,0,0,0.08); display: block; margin-bottom: 10px; color: #1c1c1e; }
+</style>
+</head>
+<body>
+<header>
+  <h1>📚 ISBNスキャナー</h1>
+  <p>バーコードをカメラに向けると自動で読み取ります</p>
+</header>
+<div class="content">
+  <section>
+    <div class="section-label">カメラスキャン</div>
+    <div id="lib-msg">ライブラリを読み込み中...</div>
+    <div id="video-wrap">
+      <video id="video" autoplay playsinline muted></video>
+      <div id="overlay">
+        <div class="frame"><div class="scanline"></div></div>
+      </div>
+      <div id="cam-hint">枠内にバーコードを合わせてください</div>
+    </div>
+    <div id="detect-banner"></div>
+    <div id="loading">書籍情報を検索中...</div>
+    <div id="book-preview" class="card">
+      <div class="book-inner">
+        <div id="bk-ph">📖</div>
+        <img id="bk-img" alt="書影">
+        <div class="bk-meta">
+          <div id="bk-title"></div>
+          <div id="bk-author"></div>
+          <div id="bk-pub"></div>
+          <div id="bk-isbn"></div>
+        </div>
+      </div>
+      <div class="book-actions">
+        <button class="btn-primary" onclick="saveBook()">＋ 追加</button>
+        <button class="btn-secondary" onclick="discardBook()">やり直す</button>
+      </div>
+    </div>
+    <button id="btn-cam" class="btn-primary" onclick="startCamera()" disabled>読み込み中...</button>
+    <div style="margin-top:8px;">
+      <button id="btn-stop" class="btn-secondary" style="display:none;" onclick="stopCamera()">カメラを停止</button>
+    </div>
+  </section>
+  <section>
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+      <div class="section-label" style="margin-bottom:0;">登録済み書籍（<span id="cnt">0</span>件）</div>
+      <button class="btn-danger" onclick="clearAll()">全削除</button>
+    </div>
+    <div class="card" id="list-wrap">
+      <div class="empty-msg">まだ登録された書籍はありません。</div>
+    </div>
+  </section>
+  <section>
+    <div class="section-label">ISBNテキストデータ（1行1件）</div>
+    <textarea id="isbn-ta" readonly placeholder="登録するとここにISBNが表示されます"></textarea>
+    <button class="btn-secondary" onclick="downloadTxt()">↓ テキストファイルをダウンロード</button>
+  </section>
+</div>
+
+<script>
+var books = [];
+var scanning = false;
+var pending = null;
+var videoStream = null;
+var scanInterval = null;
+var ZXingModule = null;
+
+// ZXingをESM形式で読み込む（Chrome対応）
+function loadLibrary() {
+  var s = document.createElement('script');
+  s.type = 'text/javascript';
+  s.src = 'https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/index.min.js';
+  s.onload = function() {
+    if (window.ZXingBrowser && window.ZXingBrowser.BrowserMultiFormatReader) {
+      ZXingModule = window.ZXingBrowser;
+      onLibReady();
+    } else {
+      loadLibraryFallback();
+    }
+  };
+  s.onerror = function() { loadLibraryFallback(); };
+  document.head.appendChild(s);
+}
+
+function loadLibraryFallback() {
+  var s = document.createElement('script');
+  s.src = 'https://unpkg.com/@zxing/browser@0.1.5/umd/index.min.js';
+  s.onload = function() {
+    if (window.ZXingBrowser && window.ZXingBrowser.BrowserMultiFormatReader) {
+      ZXingModule = window.ZXingBrowser;
+      onLibReady();
+    } else {
+      loadLibraryLegacy();
+    }
+  };
+  s.onerror = function() { loadLibraryLegacy(); };
+  document.head.appendChild(s);
+}
+
+function loadLibraryLegacy() {
+  // 旧バージョンのZXingを試す
+  var s = document.createElement('script');
+  s.src = 'https://cdn.jsdelivr.net/npm/@zxing/library@0.18.6/umd/index.min.js';
+  s.onload = function() {
+    if (window.ZXing && window.ZXing.BrowserMultiFormatReader) {
+      ZXingModule = { BrowserMultiFormatReader: window.ZXing.BrowserMultiFormatReader, legacy: true };
+      onLibReady();
+    } else {
+      onLibError();
+    }
+  };
+  s.onerror = function() { onLibError(); };
+  document.head.appendChild(s);
+}
+
+function onLibReady() {
+  document.getElementById('lib-msg').style.display = 'none';
+  var btn = document.getElementById('btn-cam');
+  btn.textContent = '📷 カメラを起動';
+  btn.disabled = false;
+}
+
+function onLibError() {
+  document.getElementById('lib-msg').textContent = 'ライブラリの読み込みに失敗しました。ページを再読み込みしてください。';
+  document.getElementById('btn-cam').textContent = '読み込み失敗 - 再読み込みしてください';
+}
+
+loadLibrary();
+
+async function startCamera() {
+  if (!ZXingModule) { alert('ライブラリが読み込まれていません。ページを再読み込みしてください。'); return; }
+
+  document.getElementById('btn-cam').style.display = 'none';
+  document.getElementById('btn-stop').style.display = 'block';
+  document.getElementById('video-wrap').style.display = 'block';
+  document.getElementById('detect-banner').style.display = 'none';
+  document.getElementById('book-preview').style.display = 'none';
+  document.getElementById('cam-hint').textContent = '枠内にバーコードを合わせてください';
+
+  try {
+    // まず背面カメラを試みる
+    var constraints = { video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } } };
+    videoStream = await navigator.mediaDevices.getUserMedia(constraints);
+    var video = document.getElementById('video');
+    video.srcObject = videoStream;
+    await video.play();
+    scanning = true;
+    startScanLoop(video);
+  } catch(e) {
+    var name = e.name || '';
+    var msg;
+    if (name === 'NotAllowedError') {
+      msg = 'カメラの許可が必要です。\nアドレスバー付近のカメラアイコンをクリックして許可してください。';
+    } else if (name === 'NotFoundError') {
+      msg = 'カメラが見つかりません。カメラが接続されているか確認してください。';
+    } else if (name === 'NotReadableError') {
+      msg = 'カメラが他のアプリで使用中です。他のアプリを閉じてから再度お試しください。';
+    } else {
+      msg = 'カメラエラー：' + name + '\n' + (e.message || '');
+    }
+    alert(msg);
+    stopCamera();
+  }
+}
+
+function startScanLoop(video) {
+  var reader = new ZXingModule.BrowserMultiFormatReader();
+
+  function tick() {
+    if (!scanning) return;
+    if (video.readyState < 2) { scanInterval = setTimeout(tick, 200); return; }
+    try {
+      reader.decodeFromVideoElement(video).then(function(result) {
+        if (!scanning) return;
+        var text = result.getText ? result.getText() : result.text;
+        if (text && /^\d{10}$|^\d{13}$/.test(text)) {
+          if (books.find(function(b) { return b.isbn === text; })) {
+            document.getElementById('cam-hint').textContent = '⚠️ ' + text + ' はすでに登録済みです';
+            scanInterval = setTimeout(tick, 800);
+            return;
+          }
+          scanning = false;
+          onFound(text);
+        } else {
+          scanInterval = setTimeout(tick, 300);
+        }
+      }).catch(function() {
+        if (scanning) scanInterval = setTimeout(tick, 300);
+      });
+    } catch(e) {
+      if (scanning) scanInterval = setTimeout(tick, 300);
+    }
+  }
+  scanInterval = setTimeout(tick, 500);
+}
+
+function stopCamera() {
+  scanning = false;
+  if (scanInterval) { clearTimeout(scanInterval); scanInterval = null; }
+  if (videoStream) { videoStream.getTracks().forEach(function(t) { t.stop(); }); videoStream = null; }
+  var video = document.getElementById('video');
+  video.srcObject = null;
+  document.getElementById('video-wrap').style.display = 'none';
+  document.getElementById('btn-stop').style.display = 'none';
+  document.getElementById('btn-cam').style.display = 'block';
+}
+
+async function onFound(isbn) {
+  stopCamera();
+  var banner = document.getElementById('detect-banner');
+  banner.textContent = '✅ 読み取り成功：' + isbn;
+  banner.style.display = 'block';
+  document.getElementById('loading').style.display = 'block';
+
+  try {
+    var res = await fetch('https://www.googleapis.com/books/v1/volumes?q=isbn:' + isbn);
+    var data = await res.json();
+    document.getElementById('loading').style.display = 'none';
+    var info = (data.items && data.items.length) ? data.items[0].volumeInfo : null;
+    pending = {
+      isbn: isbn,
+      title: info ? (info.title || '不明') : '不明（ISBN:' + isbn + '）',
+      author: info && info.authors ? info.authors.join(', ') : '',
+      publisher: info ? [info.publisher, info.publishedDate ? info.publishedDate.slice(0,4)+'年' : ''].filter(Boolean).join(' · ') : '',
+      thumb: info && info.imageLinks ? (info.imageLinks.thumbnail || info.imageLinks.smallThumbnail || '').replace('http://','https://') : ''
+    };
+  } catch(e) {
+    document.getElementById('loading').style.display = 'none';
+    pending = { isbn: isbn, title: 'ISBN:' + isbn, author: '', publisher: '', thumb: '' };
+  }
+
+  document.getElementById('bk-title').textContent = pending.title;
+  document.getElementById('bk-author').textContent = pending.author || '著者不明';
+  document.getElementById('bk-pub').textContent = pending.publisher;
+  document.getElementById('bk-isbn').textContent = 'ISBN: ' + pending.isbn;
+  var img = document.getElementById('bk-img');
+  var ph = document.getElementById('bk-ph');
+  if (pending.thumb) {
+    img.src = pending.thumb;
+    img.style.display = 'block'; ph.style.display = 'none';
+    img.onerror = function() { img.style.display='none'; ph.style.display='flex'; };
+  } else { img.style.display='none'; ph.style.display='flex'; }
+  document.getElementById('book-preview').style.display = 'block';
+}
+
+function saveBook() {
+  if (!pending) return;
+  books.unshift(pending);
+  pending = null;
+  document.getElementById('book-preview').style.display = 'none';
+  document.getElementById('detect-banner').style.display = 'none';
+  render();
+  startCamera();
+}
+
+function discardBook() {
+  pending = null;
+  document.getElementById('book-preview').style.display = 'none';
+  document.getElementById('detect-banner').style.display = 'none';
+  startCamera();
+}
+
+function removeBook(isbn) {
+  books = books.filter(function(b) { return b.isbn !== isbn; });
+  render();
+}
+
+function clearAll() {
+  if (!books.length) return;
+  if (!confirm('登録済みの書籍をすべて削除しますか？')) return;
+  books = [];
+  render();
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function render() {
+  document.getElementById('cnt').textContent = books.length;
+  var wrap = document.getElementById('list-wrap');
+  var ta = document.getElementById('isbn-ta');
+  if (!books.length) {
+    wrap.innerHTML = '<div class="empty-msg">まだ登録された書籍はありません。</div>';
+    ta.value = '';
+    return;
+  }
+  wrap.innerHTML = books.map(function(b) {
+    return '<div class="list-row">'
+      + '<div class="row-info">'
+      + '<div class="row-isbn">' + esc(b.isbn) + '</div>'
+      + '<div class="row-title">' + esc(b.title) + '</div>'
+      + '</div>'
+      + '<button class="del-btn" onclick="removeBook(\'' + esc(b.isbn) + '\')" aria-label="削除">✕</button>'
+      + '</div>';
+  }).join('');
+  ta.value = books.map(function(b) { return b.isbn; }).join('\n');
+}
+
+function downloadTxt() {
+  if (!books.length) { alert('登録された書籍がありません。'); return; }
+  var text = books.map(function(b) { return b.isbn; }).join('\n');
+  var blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url; a.download = 'isbn_list.txt'; a.click();
+  URL.revokeObjectURL(url);
+}
+</script>
+</body>
+</html>
