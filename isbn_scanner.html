@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>ISBNスキャナー</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif; background: #f2f2f7; color: #1c1c1e; min-height: 100vh; }
+  header { background: #fff; border-bottom: 0.5px solid #c6c6c8; padding: 16px; text-align: center; position: sticky; top: 0; z-index: 10; }
+  header h1 { font-size: 17px; font-weight: 600; }
+  header p { font-size: 12px; color: #8e8e93; margin-top: 2px; }
+  .content { padding: 16px; max-width: 480px; margin: 0 auto; }
+  section { margin-bottom: 24px; }
+  .section-label { font-size: 12px; color: #8e8e93; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 8px; padding: 0 4px; }
+  .card { background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+
+  /* スキャン入力エリア */
+  #scan-area { background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); margin-bottom: 12px; text-align: center; }
+  #scan-icon { font-size: 48px; margin-bottom: 12px; }
+  #scan-msg { font-size: 15px; font-weight: 500; color: #1c1c1e; margin-bottom: 6px; }
+  #scan-sub { font-size: 13px; color: #8e8e93; margin-bottom: 16px; }
+  #isbn-input { width: 100%; padding: 12px 14px; font-size: 18px; font-family: monospace; border: 2px solid #007aff; border-radius: 10px; text-align: center; letter-spacing: 0.08em; color: #1c1c1e; background: #f8f8ff; outline: none; }
+  #isbn-input:focus { border-color: #0051d4; background: #fff; }
+  #input-hint { font-size: 12px; color: #8e8e93; margin-top: 8px; }
+  #status-bar { margin-top: 12px; min-height: 20px; font-size: 13px; text-align: center; }
+  .status-ok  { color: #34c759; font-weight: 500; }
+  .status-err { color: #ff3b30; }
+  .status-info{ color: #8e8e93; }
+
+  /* 書籍プレビュー */
+  #book-preview { display: none; margin-bottom: 12px; }
+  .book-inner { display: flex; gap: 12px; padding: 14px; }
+  #bk-img { width: 56px; height: 76px; object-fit: cover; border-radius: 6px; border: 0.5px solid #e5e5ea; flex-shrink: 0; display: none; }
+  #bk-ph { width: 56px; height: 76px; background: #f2f2f7; border-radius: 6px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 28px; }
+  .bk-meta { flex: 1; min-width: 0; }
+  #bk-title { font-size: 14px; font-weight: 600; line-height: 1.4; margin-bottom: 3px; }
+  #bk-author { font-size: 12px; color: #8e8e93; margin-bottom: 2px; }
+  #bk-pub { font-size: 11px; color: #aeaeb2; }
+  #bk-isbn-label { font-size: 11px; color: #007aff; font-family: monospace; margin-top: 4px; }
+  .book-actions { padding: 0 14px 14px; display: flex; gap: 8px; }
+  .book-actions button { font-size: 14px; padding: 11px; }
+
+  .btn-primary { width: 100%; padding: 14px; background: #007aff; color: #fff; border: none; border-radius: 12px; font-size: 16px; font-weight: 600; cursor: pointer; }
+  .btn-primary:active { opacity: 0.8; }
+  .btn-secondary { width: 100%; padding: 13px; background: #fff; color: #007aff; border: 1px solid #c6c6c8; border-radius: 12px; font-size: 15px; font-weight: 500; cursor: pointer; }
+  .btn-secondary:active { background: #f2f2f7; }
+  .btn-danger { background: none; border: none; color: #ff3b30; font-size: 13px; cursor: pointer; padding: 4px 8px; }
+
+  #loading { display: none; font-size: 13px; color: #8e8e93; text-align: center; padding: 12px; }
+
+  /* リスト */
+  .list-row { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 0.5px solid #e5e5ea; }
+  .list-row:last-child { border-bottom: none; }
+  .row-info { flex: 1; min-width: 0; }
+  .row-isbn { font-size: 11px; font-family: monospace; color: #8e8e93; margin-bottom: 1px; }
+  .row-title { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .del-btn { color: #c7c7cc; background: none; border: none; font-size: 20px; cursor: pointer; padding: 4px; }
+  .empty-msg { font-size: 13px; color: #aeaeb2; text-align: center; padding: 20px; }
+
+  #isbn-ta { width: 100%; font-family: monospace; font-size: 13px; background: #fff; border: none; border-radius: 12px; padding: 12px 14px; resize: none; min-height: 80px; line-height: 1.9; box-shadow: 0 1px 3px rgba(0,0,0,0.08); display: block; margin-bottom: 10px; color: #1c1c1e; }
+
+  /* ガイド */
+  .guide-box { background: #fff; border-radius: 12px; padding: 14px 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); font-size: 13px; color: #3a3a3c; line-height: 1.9; }
+  .guide-box h3 { font-size: 14px; font-weight: 600; margin-bottom: 8px; color: #1c1c1e; }
+</style>
+</head>
+<body>
+<header>
+  <h1>📚 ISBNスキャナー</h1>
+  <p>バーコードリーダー対応版</p>
+</header>
+<div class="content">
+
+  <section>
+    <div class="section-label">スキャン入力</div>
+    <div id="scan-area">
+      <div id="scan-icon">🔍</div>
+      <div id="scan-msg">バーコードリーダーで読み取ってください</div>
+      <div id="scan-sub">入力欄をクリックしてからバーコードをスキャン</div>
+      <input id="isbn-input" type="text" inputmode="numeric" maxlength="20"
+             placeholder="978XXXXXXXXXX"
+             autocomplete="off" autocorrect="off" spellcheck="false"
+             onfocus="onFocus()" onblur="onBlur()">
+      <div id="input-hint">バーコードリーダーを接続してスキャンするか、数字を直接入力してEnterを押してください</div>
+      <div id="status-bar"></div>
+    </div>
+
+    <div id="loading">書籍情報を検索中...</div>
+
+    <div id="book-preview" class="card">
+      <div class="book-inner">
+        <div id="bk-ph">📖</div>
+        <img id="bk-img" alt="書影">
+        <div class="bk-meta">
+          <div id="bk-title"></div>
+          <div id="bk-author"></div>
+          <div id="bk-pub"></div>
+          <div id="bk-isbn-label"></div>
+        </div>
+      </div>
+      <div class="book-actions">
+        <button class="btn-primary" onclick="saveBook()">＋ リストに追加</button>
+        <button class="btn-secondary" onclick="discardBook()">キャンセル</button>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+      <div class="section-label" style="margin-bottom:0;">登録済み書籍（<span id="cnt">0</span>件）</div>
+      <button class="btn-danger" onclick="clearAll()">全削除</button>
+    </div>
+    <div class="card" id="list-wrap">
+      <div class="empty-msg">まだ登録された書籍はありません。</div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-label">ISBNテキストデータ（1行1件）</div>
+    <textarea id="isbn-ta" readonly placeholder="登録するとここにISBNが表示されます"></textarea>
+    <button class="btn-secondary" onclick="downloadTxt()">↓ テキストファイルをダウンロード</button>
+  </section>
+
+  <section>
+    <div class="section-label">使い方</div>
+    <div class="guide-box">
+      <h3>🔌 バーコードリーダーを使う場合</h3>
+      ① USBバーコードリーダーをPCに接続<br>
+      ② 上の入力欄をクリックしてフォーカス<br>
+      ③ 書籍のISBNバーコード（上段・978〜）をスキャン<br>
+      ④ 自動でISBNが入力されて書籍情報が表示されます<br><br>
+      <h3>⌨️ 手動入力する場合</h3>
+      ① 入力欄に13桁のISBNを入力<br>
+      ② Enterキーを押す
+    </div>
+  </section>
+
+</div>
+
+<script>
+var books = [];
+var pending = null;
+var inputTimer = null;
+
+// ページ読み込み時に入力欄にフォーカス
+window.onload = function() {
+  focusInput();
+};
+
+function focusInput() {
+  document.getElementById('isbn-input').focus();
+}
+
+function onFocus() {
+  document.getElementById('scan-icon').textContent = '✅';
+  document.getElementById('scan-msg').textContent = 'スキャン待機中...';
+  document.getElementById('scan-sub').textContent = 'バーコードをスキャンしてください';
+}
+
+function onBlur() {
+  document.getElementById('scan-icon').textContent = '🔍';
+  document.getElementById('scan-msg').textContent = 'バーコードリーダーで読み取ってください';
+  document.getElementById('scan-sub').textContent = '入力欄をクリックしてからバーコードをスキャン';
+}
+
+function setStatus(msg, type) {
+  var el = document.getElementById('status-bar');
+  el.textContent = msg;
+  el.className = 'status-' + (type || 'info');
+}
+
+// 入力イベント：バーコードリーダーは高速入力後にEnterを送る
+document.getElementById('isbn-input').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    var val = this.value.trim().replace(/[^0-9]/g, '');
+    if (val.length >= 10) {
+      processISBN(val);
+    } else if (val.length > 0) {
+      setStatus('ISBNは10桁または13桁です（現在' + val.length + '桁）', 'err');
+    }
+  }
+});
+
+// バーコードリーダーは自動的にEnterを送るが、
+// 念のため入力が止まった0.5秒後にも自動処理
+document.getElementById('isbn-input').addEventListener('input', function() {
+  var val = this.value.trim().replace(/[^0-9]/g, "");
+  if (inputTimer) clearTimeout(inputTimer);
+  if (val.length > 13) {
+    setStatus("入力が長すぎます（" + val.length + "桁）", "err");
+  } else if (val.length === 13) {
+    // バーコードリーダー用：13桁になってから300ms後に自動処理
+    inputTimer = setTimeout(function() {
+      var cur = document.getElementById("isbn-input").value.trim().replace(/[^0-9]/g, "");
+      if (cur.length === 13) processISBN(cur);
+    }, 300);
+  } else {
+    setStatus(val.length + " / 13桁", "info");
+  }
+});
+
+async function processISBN(isbn) {
+  // 10桁の場合は13桁に変換
+  if (isbn.length === 10) {
+    isbn = '978' + isbn.slice(0, 9);
+    var check = 0;
+    for (var i = 0; i < 12; i++) {
+      check += parseInt(isbn[i]) * (i % 2 === 0 ? 1 : 3);
+    }
+    isbn += ((10 - (check % 10)) % 10).toString();
+  }
+
+  if (!/^\d{13}$/.test(isbn)) {
+    setStatus('無効なISBNです', 'err');
+    return;
+  }
+
+  if (books.find(function(b) { return b.isbn === isbn; })) {
+    setStatus('⚠️ ' + isbn + ' はすでに登録済みです', 'err');
+    document.getElementById('isbn-input').value = '';
+    setTimeout(focusInput, 100);
+    return;
+  }
+
+  setStatus('検索中...', 'info');
+  document.getElementById('isbn-input').value = '';
+  document.getElementById('book-preview').style.display = 'none';
+  document.getElementById('loading').style.display = 'block';
+
+  try {
+    var res = await fetch('https://www.googleapis.com/books/v1/volumes?q=isbn:' + isbn);
+    var data = await res.json();
+    document.getElementById('loading').style.display = 'none';
+    var info = (data.items && data.items.length) ? data.items[0].volumeInfo : null;
+    pending = {
+      isbn: isbn,
+      title: info ? (info.title || '不明') : '不明（ISBN:' + isbn + '）',
+      author: info && info.authors ? info.authors.join(', ') : '',
+      publisher: info ? [info.publisher, info.publishedDate ? info.publishedDate.slice(0,4)+'年':''].filter(Boolean).join(' · ') : '',
+      thumb: info && info.imageLinks ? (info.imageLinks.thumbnail || info.imageLinks.smallThumbnail || '').replace('http://','https://') : ''
+    };
+  } catch(e) {
+    document.getElementById('loading').style.display = 'none';
+    pending = { isbn: isbn, title: 'ISBN:' + isbn, author: '', publisher: '', thumb: '' };
+  }
+
+  document.getElementById('bk-title').textContent = pending.title;
+  document.getElementById('bk-author').textContent = pending.author || '著者不明';
+  document.getElementById('bk-pub').textContent = pending.publisher;
+  document.getElementById('bk-isbn-label').textContent = 'ISBN: ' + pending.isbn;
+  var img = document.getElementById('bk-img');
+  var ph  = document.getElementById('bk-ph');
+  if (pending.thumb) {
+    img.src = pending.thumb; img.style.display = 'block'; ph.style.display = 'none';
+    img.onerror = function() { img.style.display='none'; ph.style.display='flex'; };
+  } else { img.style.display='none'; ph.style.display='flex'; }
+
+  document.getElementById('book-preview').style.display = 'block';
+  setStatus('✅ ' + isbn + ' を読み取りました', 'ok');
+  setTimeout(focusInput, 100);
+}
+
+function saveBook() {
+  if (!pending) return;
+  books.unshift(pending);
+  pending = null;
+  document.getElementById('book-preview').style.display = 'none';
+  setStatus('登録しました', 'ok');
+  render();
+  setTimeout(focusInput, 100);
+}
+
+function discardBook() {
+  pending = null;
+  document.getElementById('book-preview').style.display = 'none';
+  setStatus('', 'info');
+  setTimeout(focusInput, 100);
+}
+
+function removeBook(isbn) {
+  books = books.filter(function(b) { return b.isbn !== isbn; });
+  render();
+}
+
+function clearAll() {
+  if (!books.length) return;
+  if (!confirm('登録済みの書籍をすべて削除しますか？')) return;
+  books = []; render();
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function render() {
+  document.getElementById('cnt').textContent = books.length;
+  var wrap = document.getElementById('list-wrap');
+  var ta   = document.getElementById('isbn-ta');
+  if (!books.length) {
+    wrap.innerHTML = '<div class="empty-msg">まだ登録された書籍はありません。</div>';
+    ta.value = ''; return;
+  }
+  wrap.innerHTML = books.map(function(b) {
+    return '<div class="list-row"><div class="row-info">'
+      + '<div class="row-isbn">' + esc(b.isbn) + '</div>'
+      + '<div class="row-title">' + esc(b.title) + '</div>'
+      + '</div><button class="del-btn" onclick="removeBook(\'' + esc(b.isbn) + '\')" aria-label="削除">✕</button></div>';
+  }).join('');
+  ta.value = books.map(function(b) { return b.isbn; }).join('\n');
+}
+
+function downloadTxt() {
+  if (!books.length) { alert('登録された書籍がありません。'); return; }
+  var blob = new Blob([books.map(function(b){return b.isbn;}).join('\n')], { type: 'text/plain;charset=utf-8' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a'); a.href = url; a.download = 'isbn_list.txt'; a.click();
+  URL.revokeObjectURL(url);
+}
+</script>
+</body>
+</html>
